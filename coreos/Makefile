@@ -11,7 +11,7 @@ HYPERKUBE = ../_output/dockerized/bin/linux/amd64/hyperkube
 all: container
 
 container: Dockerfile $(HYPERKUBE)
-	$(eval TEMPDIR := $(shell mktemp -d -t $(KUBERNETES_VERSION)))
+	$(eval TEMPDIR := $(shell mktemp -d -t $(KUBERNETES_VERSION).XXXX))
 	cp $^ $(TEMPDIR)
 	docker build -t $(TAG) $(TEMPDIR)
 	@$(foreach p,$^,rm $(TEMPDIR)/p;)
