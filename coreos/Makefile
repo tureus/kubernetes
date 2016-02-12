@@ -14,8 +14,7 @@ container: Dockerfile $(HYPERKUBE)
 	$(eval TEMPDIR := $(shell mktemp -d -t $(KUBERNETES_VERSION).XXXX))
 	cp $^ $(TEMPDIR)
 	docker build -t $(TAG) $(TEMPDIR)
-	@$(foreach p,$^,rm $(TEMPDIR)/p;)
-	rmdir $(TEMPDIR)
+	rm -rf $(TEMPDIR)
 
 push:
 	docker push $(TAG)
