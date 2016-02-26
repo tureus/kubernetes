@@ -37,7 +37,7 @@ import (
 
 func NewEtcdStorage(t *testing.T, group string) (storage.Interface, *etcdtesting.EtcdTestServer) {
 	server := etcdtesting.NewEtcdTestClientServer(t)
-	storage := etcdstorage.NewEtcdStorage(server.Client, testapi.Groups[group].Codec(), etcdtest.PathPrefix(), false)
+	storage := etcdstorage.NewEtcdStorage(server.Cluster.RandClient(), testapi.Groups[group].Codec(), etcdtest.PathPrefix(), false)
 	return storage, server
 }
 

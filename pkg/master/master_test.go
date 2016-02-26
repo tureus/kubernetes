@@ -66,13 +66,13 @@ func setUp(t *testing.T) (Master, *etcdtesting.EtcdTestServer, Config, *assert.A
 	storageVersions := make(map[string]string)
 	storageDestinations := genericapiserver.NewStorageDestinations()
 	storageDestinations.AddAPIGroup(
-		api.GroupName, etcdstorage.NewEtcdStorage(server.Client, testapi.Default.Codec(), etcdtest.PathPrefix(), false))
+		api.GroupName, etcdstorage.NewEtcdStorage(server.Cluster.RandClient(), testapi.Default.Codec(), etcdtest.PathPrefix(), false))
 	storageDestinations.AddAPIGroup(
-		autoscaling.GroupName, etcdstorage.NewEtcdStorage(server.Client, testapi.Autoscaling.Codec(), etcdtest.PathPrefix(), false))
+		autoscaling.GroupName, etcdstorage.NewEtcdStorage(server.Cluster.RandClient(), testapi.Autoscaling.Codec(), etcdtest.PathPrefix(), false))
 	storageDestinations.AddAPIGroup(
-		batch.GroupName, etcdstorage.NewEtcdStorage(server.Client, testapi.Batch.Codec(), etcdtest.PathPrefix(), false))
+		batch.GroupName, etcdstorage.NewEtcdStorage(server.Cluster.RandClient(), testapi.Batch.Codec(), etcdtest.PathPrefix(), false))
 	storageDestinations.AddAPIGroup(
-		extensions.GroupName, etcdstorage.NewEtcdStorage(server.Client, testapi.Extensions.Codec(), etcdtest.PathPrefix(), false))
+		extensions.GroupName, etcdstorage.NewEtcdStorage(server.Cluster.RandClient(), testapi.Extensions.Codec(), etcdtest.PathPrefix(), false))
 
 	config.StorageDestinations = storageDestinations
 	storageVersions[api.GroupName] = testapi.Default.GroupVersion().String()
@@ -481,7 +481,7 @@ func initThirdParty(t *testing.T, version string) (*Master, *etcdtesting.EtcdTes
 			},
 		},
 	}
-	master.thirdPartyStorage = etcdstorage.NewEtcdStorage(etcdserver.Client, testapi.Extensions.Codec(), etcdtest.PathPrefix(), false)
+	master.thirdPartyStorage = etcdstorage.NewEtcdStorage(etcdserver.Cluster.RandClient(), testapi.Extensions.Codec(), etcdtest.PathPrefix(), false)
 	_, master.ServiceClusterIPRange, _ = net.ParseCIDR("10.0.0.0/24")
 
 	if !assert.NoError(master.InstallThirdPartyResource(api)) {
