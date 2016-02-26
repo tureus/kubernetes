@@ -31,7 +31,6 @@ import (
 	"github.com/coreos/etcd/rafthttp"
 	"github.com/coreos/etcd/wal"
 	"github.com/coreos/etcd/wal/walpb"
-
 	"github.com/coreos/pkg/capnslog"
 )
 
@@ -76,13 +75,14 @@ type RaftTimer interface {
 	Term() uint64
 }
 
-// apply contains entries, snapshot be applied.
-// After applied all the items, the application needs
-// to send notification to done chan.
+// apply contains entries, snapshot to be applied. Once
+// an apply is consumed, the entries will be persisted to
+// to raft storage concurrently; the application must read
+// raftDone before assuming the raft messages are stable.
 type apply struct {
 	entries  []raftpb.Entry
 	snapshot raftpb.Snapshot
-	done     chan struct{}
+	raftDone <-chan struct{} // rx {} after raft has persisted messages
 }
 
 type raftNode struct {
@@ -134,6 +134,7 @@ func (r *raftNode) start(s *EtcdServer) {
 		var syncC <-chan time.Time
 
 		defer r.onStop()
+
 		for {
 			select {
 			case <-r.ticker:
@@ -147,25 +148,40 @@ func (r *raftNode) start(s *EtcdServer) {
 					}
 					atomic.StoreUint64(&r.lead, rd.SoftState.Lead)
 					if rd.RaftState == raft.StateLeader {
+						// TODO: raft should send server a notification through chan when
+						// it promotes or demotes instead of modifying server directly.
 						syncC = r.s.SyncTicker
+						if r.s.lessor != nil {
+							r.s.lessor.Promote()
+						}
 						// TODO: remove the nil checking
 						// current test utility does not provide the stats
 						if r.s.stats != nil {
 							r.s.stats.BecomeLeader()
 						}
+						if r.s.compactor != nil {
+							r.s.compactor.Resume()
+						}
 					} else {
+						if r.s.lessor != nil {
+							r.s.lessor.Demote()
+						}
+						if r.s.compactor != nil {
+							r.s.compactor.Pause()
+						}
 						syncC = nil
 					}
 				}
 
-				apply := apply{
+				raftDone := make(chan struct{}, 1)
+				ap := apply{
 					entries:  rd.CommittedEntries,
 					snapshot: rd.Snapshot,
-					done:     make(chan struct{}),
+					raftDone: raftDone,
 				}
 
 				select {
-				case r.applyc <- apply:
+				case r.applyc <- ap:
 				case <-r.stopped:
 					return
 				}
@@ -183,12 +199,7 @@ func (r *raftNode) start(s *EtcdServer) {
 				r.raftStorage.Append(rd.Entries)
 
 				r.s.send(rd.Messages)
-
-				select {
-				case <-apply.done:
-				case <-r.stopped:
-					return
-				}
+				raftDone <- struct{}{}
 				r.Advance()
 			case <-syncC:
 				r.s.sync(r.s.cfg.ReqTimeout())
@@ -253,7 +264,7 @@ func startNode(cfg *ServerConfig, cl *cluster, ids []types.ID) (id types.ID, n r
 			ClusterID: uint64(cl.ID()),
 		},
 	)
-	if err := os.MkdirAll(cfg.SnapDir(), privateDirMode); err != nil {
+	if err = os.MkdirAll(cfg.SnapDir(), privateDirMode); err != nil {
 		plog.Fatalf("create snapshot directory error: %v", err)
 	}
 	if w, err = wal.Create(cfg.WALDir(), metadata); err != nil {
@@ -373,7 +384,7 @@ func restartAsStandaloneNode(cfg *ServerConfig, snapshot *raftpb.Snapshot) (type
 // the entries. The given snapshot/entries can contain two kinds of
 // ID-related entry:
 // - ConfChangeAddNode, in which case the contained ID will be added into the set.
-// - ConfChangeAddRemove, in which case the contained ID will be removed from the set.
+// - ConfChangeRemoveNode, in which case the contained ID will be removed from the set.
 func getIDs(snap *raftpb.Snapshot, ents []raftpb.Entry) []uint64 {
 	ids := make(map[uint64]bool)
 	if snap != nil {
