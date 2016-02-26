@@ -18,6 +18,7 @@ package util
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -25,14 +26,19 @@ import (
 	etcd "github.com/coreos/etcd/client"
 )
 
+var (
+	ErrAlreadyExist = errors.New("etcd: key already exist")
+	ErrNotFound     = errors.New("etcd: key not found")
+)
+
 // IsEtcdNotFound returns true if and only if err is an etcd not found error.
 func IsEtcdNotFound(err error) bool {
-	return isEtcdErrorNum(err, etcd.ErrorCodeKeyNotFound)
+	return err == ErrNotFound
 }
 
 // IsEtcdNodeExist returns true if and only if err is an etcd node already exist error.
 func IsEtcdNodeExist(err error) bool {
-	return isEtcdErrorNum(err, etcd.ErrorCodeNodeExist)
+	return err == ErrAlreadyExist
 }
 
 // IsEtcdTestFailed returns true if and only if err is an etcd write conflict.
