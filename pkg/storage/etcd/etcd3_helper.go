@@ -22,7 +22,6 @@ import (
 	"path"
 	"reflect"
 	"strings"
-	"time"
 
 	etcdclientv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/storage/storagepb"
@@ -52,6 +51,7 @@ func (c *EtcdConfig) GetType() string {
 func (c *EtcdConfig) NewStorage() (storage.Interface, error) {
 	//glog.Infof("eeeeetcd: NewStorage")
 	//debug.PrintStack()
+	glog.Infof("etcd serverlist: %v", c.ServerList)
 	cfg := &etcdclientv3.Config{
 		Endpoints: c.ServerList,
 	}
@@ -116,7 +116,7 @@ func (h *etcd3Helper) Create(ctx context.Context, key string, obj, out runtime.O
 	}
 
 	resp, err := h.kvClient.Txn(ctx).If(
-		etcdclientv3.Compare(etcdclientv3.Version(key), "<", 1),
+		etcdclientv3.Compare(etcdclientv3.ModifiedRevision(key), "<", 1),
 	).Then(
 		etcdclientv3.OpPut(key, string(data)),
 	).Commit()
@@ -146,14 +146,14 @@ func (h *etcd3Helper) Set(ctx context.Context, key string, obj, out runtime.Obje
 		ctx = context.TODO()
 	}
 
-	version := uint64(0)
+	rev := uint64(0)
 	if h.versioner != nil {
 		var err error
-		version, err = h.versioner.ObjectResourceVersion(obj)
+		rev, err = h.versioner.ObjectResourceVersion(obj)
 		if err != nil {
 			return err
 		}
-		if version != 0 {
+		if rev != 0 {
 			// We cannot store object with resourceVersion in etcd. We need to reset it.
 			err := h.versioner.UpdateObject(obj, nil, 0)
 			if err != nil {
@@ -173,7 +173,7 @@ func (h *etcd3Helper) Set(ctx context.Context, key string, obj, out runtime.Obje
 	key = h.prefixEtcdKey(key)
 
 	txnResp, err := h.kvClient.Txn(ctx).If(
-		etcdclientv3.Compare(etcdclientv3.Version(key), "=", int64(version)),
+		etcdclientv3.Compare(etcdclientv3.ModifiedRevision(key), "=", int64(rev)),
 	).Then(
 		etcdclientv3.OpPut(key, string(data)),
 	).Commit()
@@ -340,6 +340,7 @@ func (h *etcd3Helper) Watch(ctx context.Context, key string, resourceVersion str
 	if rev == 0 {
 		resp, err := w.kv.Get(ctx, key)
 		if err != nil {
+			glog.Infof("Watch: Get failed: %v", err)
 			return nil, err
 		}
 		if len(resp.Kvs) > 0 {
@@ -353,12 +354,7 @@ func (h *etcd3Helper) Watch(ctx context.Context, key string, resourceVersion str
 				if resp.Kvs[0].CreateRevision != resp.Kvs[0].ModRevision {
 					eventType = watch.Modified
 				}
-				e := watch.Event{
-					Type:   eventType,
-					Object: obj,
-				}
-				glog.Infof("watch event: type: %s, key: %s, rev: %d", eventType, key, rev)
-				w.resultChan <- e
+				w.emitResult(eventType, obj, key, rev)
 			}
 		}
 	}
@@ -389,6 +385,7 @@ func (h *etcd3Helper) WatchList(ctx context.Context, key string, resourceVersion
 	if rev == 0 {
 		resp, err := w.kv.Get(ctx, key, etcdclientv3.WithPrefix())
 		if err != nil {
+			glog.Infof("WatchList: Get failed: %v", err)
 			return nil, err
 		}
 		rev = resp.Header.Revision
@@ -404,12 +401,7 @@ func (h *etcd3Helper) WatchList(ctx context.Context, key string, resourceVersion
 				if kv.CreateRevision != kv.ModRevision {
 					eventType = watch.Modified
 				}
-				e := watch.Event{
-					Type:   eventType,
-					Object: obj,
-				}
-				glog.Infof("watch event: type: %s, key: %s, rev: %d", eventType, key, kvRev)
-				w.resultChan <- e
+				w.emitResult(eventType, obj, key, kvRev)
 			}
 		}
 	}
@@ -530,7 +522,7 @@ func (h *etcd3Helper) Versioner() storage.Versioner {
 func (h *etcd3Helper) decode(body []byte, objPtr runtime.Object, rev int64) error {
 	_, _, err := h.codec.Decode(body, nil, objPtr)
 	if h.versioner != nil {
-		h.versioner.UpdateObject(objPtr, &time.Time{}, uint64(rev))
+		h.versioner.UpdateObject(objPtr, nil, uint64(rev))
 	}
 	return err
 }
@@ -546,9 +538,8 @@ func (h *etcd3Helper) decodeNodeList(kvs []*storagepb.KeyValue, filter storage.F
 			return err
 		}
 		if h.versioner != nil {
-			todoExpiration := &time.Time{}
 			// being unable to set the version does not prevent the object from being extracted
-			h.versioner.UpdateObject(obj, todoExpiration, uint64(kv.ModRevision))
+			h.versioner.UpdateObject(obj, nil, uint64(kv.ModRevision))
 		}
 		if filter(obj) {
 			v.Set(reflect.Append(v, reflect.ValueOf(obj).Elem()))

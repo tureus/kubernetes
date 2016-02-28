@@ -17,8 +17,6 @@ limitations under the License.
 package etcd
 
 import (
-	"time"
-
 	etcdclientv3 "github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/storage/storagepb"
 	"github.com/golang/glog"
@@ -117,12 +115,7 @@ func (w *etcd3Watcher) processEvent(event *storagepb.Event) {
 		if event.Kv.CreateRevision != event.Kv.ModRevision {
 			eventType = watch.Modified
 		}
-		e := watch.Event{
-			Type:   eventType,
-			Object: obj,
-		}
-		glog.Infof("watch event: type: %s, key: %s, rev: %d", event.Type, event.Kv.Key, event.Kv.ModRevision)
-		w.resultChan <- e
+		w.emitResult(eventType, obj, string(event.Kv.Key), event.Kv.ModRevision)
 	case storagepb.DELETE, storagepb.EXPIRE:
 		resp, err := w.kv.Get(context.TODO(), string(event.Kv.Key), etcdclientv3.WithRev(event.Kv.ModRevision-1))
 		if err != nil {
@@ -136,12 +129,7 @@ func (w *etcd3Watcher) processEvent(event *storagepb.Event) {
 		if !w.filter(obj) {
 			return
 		}
-		e := watch.Event{
-			Type:   watch.Deleted,
-			Object: obj,
-		}
-		glog.Infof("watch event: type: %s, key: %s, rev: %d", event.Type, event.Kv.Key, event.Kv.ModRevision)
-		w.resultChan <- e
+		w.emitResult(watch.Deleted, obj, string(event.Kv.Key), event.Kv.ModRevision)
 	}
 }
 
@@ -151,10 +139,18 @@ func (w *etcd3Watcher) decode(body []byte, rev int64) (runtime.Object, error) {
 		return nil, err
 	}
 	if w.versioner != nil {
-		todoExpiration := &time.Time{}
-		if err := w.versioner.UpdateObject(obj, todoExpiration, uint64(rev)); err != nil {
+		if err := w.versioner.UpdateObject(obj, nil, uint64(rev)); err != nil {
 			return nil, err
 		}
 	}
 	return obj, nil
+}
+
+func (w *etcd3Watcher) emitResult(eventType watch.EventType, obj runtime.Object, key string, rev int64) {
+	glog.Infof("watch event: type: %s, key: %s, rev: %d", eventType, key, rev)
+	e := watch.Event{
+		Type:   eventType,
+		Object: obj,
+	}
+	w.resultChan <- e
 }
