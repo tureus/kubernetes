@@ -107,56 +107,65 @@ func NewFsInfo(context Context) (FsInfo, error) {
 	}
 	glog.Infof("Filesystem partitions: %+v", partitions)
 	fsInfo.partitions = partitions
-	fsInfo.addLabels(context)
+	fsInfo.addLabels(context, mounts)
 	return fsInfo, nil
 }
 
-func (self *RealFsInfo) addLabels(context Context) {
-	dockerPaths := getDockerImagePaths(context)
-	for src, p := range self.partitions {
-		if p.mountpoint == "/" {
-			if _, ok := self.labels[LabelSystemRoot]; !ok {
-				self.labels[LabelSystemRoot] = src
+func (self *RealFsInfo) addLabels(context Context, mounts []*mount.MountInfo) {
+	for _, m := range mounts {
+		if m.Mountpoint == "/" {
+			self.partitions[m.Source] = partition{
+				fsType:     m.Fstype,
+				mountpoint: m.Mountpoint,
+				major:      uint(m.Major),
+				minor:      uint(m.Minor),
 			}
+			self.labels[LabelSystemRoot] = m.Source
 		}
-		self.updateDockerImagesPath(src, p.mountpoint, dockerPaths)
-		// TODO(rjnagal): Add label for docker devicemapper pool.
 	}
+
+	self.updateDockerImagesPath(mounts, getDockerImagePaths(context))
 }
 
 // Generate a list of possible mount points for docker image management from the docker root directory.
 // Right now, we look for each type of supported graph driver directories, but we can do better by parsing
 // some of the context from `docker info`.
-func getDockerImagePaths(context Context) []string {
+func getDockerImagePaths(context Context) map[string]struct{} {
+	dockerImagePaths := map[string]struct{}{
+		"/": {},
+	}
 	// TODO(rjnagal): Detect docker root and graphdriver directories from docker info.
 	dockerRoot := context.DockerRoot
-	dockerImagePaths := []string{}
 	for _, dir := range []string{"devicemapper", "btrfs", "aufs"} {
-		dockerImagePaths = append(dockerImagePaths, path.Join(dockerRoot, dir))
+		dockerImagePaths[path.Join(dockerRoot, dir)] = struct{}{}
 	}
 	for dockerRoot != "/" && dockerRoot != "." {
-		dockerImagePaths = append(dockerImagePaths, dockerRoot)
+		dockerImagePaths[dockerRoot] = struct{}{}
 		dockerRoot = filepath.Dir(dockerRoot)
 	}
-	dockerImagePaths = append(dockerImagePaths, "/")
 	return dockerImagePaths
 }
 
 // This method compares the mountpoint with possible docker image mount points. If a match is found,
 // docker images label is added to the partition.
-func (self *RealFsInfo) updateDockerImagesPath(source string, mountpoint string, dockerImagePaths []string) {
-	for _, v := range dockerImagePaths {
-		if v == mountpoint {
-			if i, ok := self.labels[LabelDockerImages]; ok {
-				// pick the innermost mountpoint.
-				mnt := self.partitions[i].mountpoint
-				if len(mnt) < len(mountpoint) {
-					self.labels[LabelDockerImages] = source
-				}
-			} else {
-				self.labels[LabelDockerImages] = source
+func (self *RealFsInfo) updateDockerImagesPath(mounts []*mount.MountInfo, dockerImagePaths map[string]struct{}) {
+	var useMount *mount.MountInfo
+	for _, m := range mounts {
+		if _, ok := dockerImagePaths[m.Mountpoint]; ok {
+			// pick the innermost mountpoint
+			if useMount == nil || (len(useMount.Mountpoint) < len(m.Mountpoint)) {
+				useMount = m
 			}
 		}
+	}
+	if useMount != nil {
+		self.partitions[useMount.Source] = partition{
+			fsType:     useMount.Fstype,
+			mountpoint: useMount.Mountpoint,
+			major:      uint(useMount.Major),
+			minor:      uint(useMount.Minor),
+		}
+		self.labels[LabelDockerImages] = useMount.Source
 	}
 }
 
