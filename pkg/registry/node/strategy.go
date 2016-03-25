@@ -141,6 +141,7 @@ func NodeToSelectableFields(node *api.Node) fields.Set {
 	objectMetaFieldsSet := generic.ObjectMetaFieldsSet(node.ObjectMeta, false)
 	specificFieldsSet := fields.Set{
 		"spec.unschedulable": fmt.Sprint(node.Spec.Unschedulable),
+		"spec.untrusted": fmt.Sprint(node.Spec.Untrusted),
 	}
 	return generic.MergeFieldsSets(objectMetaFieldsSet, specificFieldsSet)
 }

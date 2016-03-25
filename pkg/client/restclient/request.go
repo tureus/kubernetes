@@ -293,6 +293,7 @@ const (
 	// A constant that clients can use to refer in a field selector to the object name field.
 	// Will be automatically emitted as the correct name for the API version.
 	nodeUnschedulable = "spec.unschedulable"
+	nodeUntrusted     = "spec.untrusted"
 	objectNameField   = "metadata.name"
 	podHost           = "spec.nodeName"
 	podStatus         = "status.phase"
@@ -352,6 +353,7 @@ var fieldMappings = versionToResourceToFieldMapping{
 		"nodes": clientFieldNameToAPIVersionFieldName{
 			objectNameField:   objectNameField,
 			nodeUnschedulable: nodeUnschedulable,
+			nodeUntrusted:     nodeUntrusted,
 		},
 		"pods": clientFieldNameToAPIVersionFieldName{
 			podHost:   podHost,
