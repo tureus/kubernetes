@@ -139,8 +139,13 @@ type ResourceGetter interface {
 // NodeToSelectableFields returns a field set that represents the object.
 func NodeToSelectableFields(node *api.Node) fields.Set {
 	objectMetaFieldsSet := generic.ObjectMetaFieldsSet(node.ObjectMeta, false)
+	untrusted, ok := node.ObjectMeta.Annotations["com.coreos.tpm/untrusted"];
+	if !ok {
+		untrusted = "false"
+	}
 	specificFieldsSet := fields.Set{
 		"spec.unschedulable": fmt.Sprint(node.Spec.Unschedulable),
+		"metadata.annotations.com.coreos.tpm.untrusted": fmt.Sprint(untrusted),
 	}
 	return generic.MergeFieldsSets(objectMetaFieldsSet, specificFieldsSet)
 }

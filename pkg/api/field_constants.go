@@ -20,6 +20,7 @@ package api
 // representation.
 const (
 	NodeUnschedulableField = "spec.unschedulable"
+	NodeUntrustedField     = "metadata.annotations.com.coreos.tpm.untrusted"
 	ObjectNameField        = "metadata.name"
 	PodHostField           = "spec.nodeName"
 	PodStatusField         = "status.phase"
