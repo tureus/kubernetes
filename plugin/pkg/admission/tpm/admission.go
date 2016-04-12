@@ -198,8 +198,19 @@ func reverify(t *tpmAdmit, delay int) {
 		for _, node := range nodes.Items {
 			state := node.Spec.Untrusted
 			t.verifyNode(&node)
-			if node.Spec.Untrusted != state {
-				t.client.Core().Nodes().Update(&node)
+			newstate := node.Spec.Untrusted
+			if newstate != state {
+				newnode, err := t.client.Core().Nodes().Get(node.Name)
+				if err != nil {
+					glog.Errorf("Unable to obtain node state for %s: %v", node.Name, err)
+					continue
+				}
+				newnode.Spec.Untrusted = newstate
+				newnode, err = t.client.Core().Nodes().Update(newnode)
+				if err != nil {
+					glog.Errorf("Unable to update node state for %s: %v", node.Name, err)
+					continue
+				}
 			}
 		}
 	}
