@@ -262,6 +262,7 @@ type ValidatedLog struct {
 	tspiconst.Log
 	Valid bool
 	Description string
+	Source string
 }
 
 func ValidateRawPCR(pcrval []byte, valid []PCRValue) bool {
@@ -281,7 +282,7 @@ func ValidateRawPCR(pcrval []byte, valid []PCRValue) bool {
 	return false
 }
 
-func ValidateBinaryPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
+func ValidateBinaryPCR(pcr int, log[]ValidatedLog, values []PCRDescription, source string) {
 	for index, logentry := range log {
 		var prefix string
 		if logentry.Pcr != int32(pcr) {
@@ -301,6 +302,7 @@ func ValidateBinaryPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
 				if validpcr.Value == "*" {
 					log[index].Valid = true
 					log[index].Description = validpcr.Description
+					log[index].Source = source
 					continue
 				}
 				validHex, err := hex.DecodeString(validpcr.Value)
@@ -311,6 +313,7 @@ func ValidateBinaryPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
 				if bytes.Equal(validHex, logentry.PcrValue[:]) {
 					log[index].Valid = true
 					log[index].Description = validpcr.Description
+					log[index].Source = source
 				}
 			}
 		}
@@ -318,7 +321,7 @@ func ValidateBinaryPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
 	return
 }
 
-func ValidateASCIIPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
+func ValidateASCIIPCR(pcr int, log[]ValidatedLog, values []PCRDescription, source string) {
 	for index, logentry := range log {
 		var prefix string
 		var event string
@@ -346,6 +349,7 @@ func ValidateASCIIPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
 				if err == nil && match == true {
 					log[index].Valid = true
 					log[index].Description = validpcr.Description
+					log[index].Source = source
 					break
 				}
 			}
@@ -354,47 +358,44 @@ func ValidateASCIIPCR(pcr int, log[]ValidatedLog, values []PCRDescription) {
 	return
 }
 
-func ValidatePCRs(log []tspiconst.Log, quote [][]byte, pcrconfig map[string]PCRConfig) ([]ValidatedLog, error) {
+func ValidatePCRs(log []tspiconst.Log, quote [][]byte, pcrconfig []map[string]PCRConfig) ([]ValidatedLog, error) {
 	validatedlog := make([]ValidatedLog, len(log))
-	validated := true
 	for index, logentry := range log {
-		validatedlog[index] = ValidatedLog{logentry, false, ""}
+		validatedlog[index] = ValidatedLog{logentry, false, "", ""}
 	}
-	for pcrname, _ := range pcrconfig {
-		pcr, _ := strconv.Atoi(pcrname)
-		if len(pcrconfig[pcrname].RawValues) != 0 {
-			valid := ValidateRawPCR(quote[pcr], pcrconfig[pcrname].RawValues)
-			// If the raw PCR is valid then all log entries for that PCR are valid
-			if valid == true {
-				for index, _ := range(validatedlog) {
-					if int(validatedlog[index].Pcr) == pcr {
-						validatedlog[index].Valid = true
+	for _, config := range pcrconfig {
+		for pcrname, _ := range config {
+			pcr, _ := strconv.Atoi(pcrname)
+			if len(config[pcrname].RawValues) != 0 {
+				valid := ValidateRawPCR(quote[pcr], config[pcrname].RawValues)
+				// If the raw PCR is valid then all log entries for that PCR are valid
+				if valid == true {
+					for index, _ := range(validatedlog) {
+						if int(validatedlog[index].Pcr) == pcr {
+							validatedlog[index].Valid = true
+							validatedlog[index].Source = config[pcrname].Source
+						}
 					}
+					continue
 				}
-				continue
 			}
-		}
 
-		if len(pcrconfig[pcrname].BinaryValues) != 0 {
-			ValidateBinaryPCR(pcr, validatedlog, pcrconfig[pcrname].BinaryValues)
-		}
+			if len(config[pcrname].BinaryValues) != 0 {
+				ValidateBinaryPCR(pcr, validatedlog, config[pcrname].BinaryValues, config[pcrname].Source)
+			}
 
-		if len(pcrconfig[pcrname].ASCIIValues) != 0 {
-			ValidateASCIIPCR(pcr, validatedlog, pcrconfig[pcrname].ASCIIValues)
-		}
-		// If this PCR is associated with any events that haven't been validated, it's invalid
-		for _, logevent := range(validatedlog) {
-			if int(logevent.Pcr) == pcr {
-				if logevent.Valid == false {
-					validated = false
-				}
+			if len(config[pcrname].ASCIIValues) != 0 {
+				ValidateASCIIPCR(pcr, validatedlog, config[pcrname].ASCIIValues, config[pcrname].Source)
 			}
 		}
 	}
 
-	if validated != true {
-		glog.Errorf("PCR state is invalid")
-		return validatedlog, fmt.Errorf("PCR state is invalid")
+	// If any events that haven't been validated, the attestation fails
+	for _, logevent := range(validatedlog) {
+		if logevent.Valid == false {
+			glog.Errorf("PCR state is invalid")
+			return validatedlog, fmt.Errorf("PCR state is invalid")
+		}
 	}
 
 	return validatedlog, nil

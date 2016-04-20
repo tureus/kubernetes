@@ -79,8 +79,9 @@ func (t *tpmAdmit) verifyNode(node *api.Node) (err error) {
 		return nil
 	}
 
-	pcrdata := make(map[string]tpm.PCRConfig)
+	pcrconfigs := make([]map[string]tpm.PCRConfig, 0)
 	if t.pcrconfig != "" {
+		pcrdata := make(map[string]tpm.PCRConfig)
 		pcrconfig, err := ioutil.ReadFile(t.pcrconfig)
 		if err != nil {
 			glog.Errorf("Unable to read valid PCR configuration %s: %v", t.pcrconfig, err)
@@ -89,6 +90,12 @@ func (t *tpmAdmit) verifyNode(node *api.Node) (err error) {
 		if err != nil {
 			glog.Errorf("Unable to parse valid PCR configuration %s: %v", t.pcrconfig, err)
 		}
+		for pcr, _ := range(pcrdata) {
+			pcrtmp := pcrdata[pcr]
+			pcrtmp.Source = t.pcrconfig
+			pcrdata[pcr] = pcrtmp
+		}
+		pcrconfigs = append(pcrconfigs, pcrdata)
 	} else  if t.pcrconfigdir != "" {
 		err = filepath.Walk(t.pcrconfigdir, func(path string, f os.FileInfo, err error) error {
 			if f.IsDir() {
@@ -99,45 +106,26 @@ func (t *tpmAdmit) verifyNode(node *api.Node) (err error) {
 				glog.Errorf("Unable to read PCR configuration %s: %v", path, err)
 				return err
 			}
-			var tmppcrdata map[string]tpm.PCRConfig
-			err = json.Unmarshal(pcrconfig, &tmppcrdata)
+			pcrdata := make(map[string]tpm.PCRConfig)
+			err = json.Unmarshal(pcrconfig, &pcrdata)
 			if err != nil {
 				glog.Errorf("Unable to parse valid PCR configuration %s: %v", path, err)
 				return err
 			}
-			for pcrname, _ := range(tmppcrdata) {
-				tmpconfig, ok := pcrdata[pcrname]
-				if !ok {
-					tmpconfig = tmppcrdata[pcrname]
-				} else {
-					tmpconfig.RawValues = append(tmpconfig.RawValues, tmppcrdata[pcrname].RawValues...)
-					tmpconfig.ASCIIValues = append(tmpconfig.ASCIIValues, tmppcrdata[pcrname].ASCIIValues...)
-					tmpconfig.BinaryValues = append(tmpconfig.BinaryValues, tmppcrdata[pcrname].BinaryValues...)
-				}
-				pcrdata[pcrname] = tmpconfig
+			for pcr, _ := range(pcrdata) {
+				pcrtmp := pcrdata[pcr]
+				pcrtmp.Source = path
+				pcrdata[pcr] = pcrtmp
 			}
+			pcrconfigs = append(pcrconfigs, pcrdata)
 			return nil
 		})
 	} else {
-		configs, err := t.handler.GetPolicies()
+		pcrconfigs, err = t.handler.GetPolicies()
 		if err != nil {
 			glog.Errorf("Unable to obtain PCR configuration: %v", err)
 			invalidateNode(node)
 			return nil
-		}
-		for _, config := range(configs) {
-			for pcrname, _ := range(config) {
-				tmpconfig, ok := pcrdata[pcrname]
-				if !ok {
-					tmpconfig = config[pcrname]
-				} else {
-					tmpconfig.RawValues = append(tmpconfig.RawValues, config[pcrname].RawValues...)
-					tmpconfig.ASCIIValues = append(tmpconfig.ASCIIValues, config[pcrname].ASCIIValues...)
-					tmpconfig.BinaryValues = append(tmpconfig.BinaryValues, config[pcrname].BinaryValues...)
-				}
-				pcrdata[pcrname] = tmpconfig
-			}
-
 		}
 	}
 
@@ -148,7 +136,7 @@ func (t *tpmAdmit) verifyNode(node *api.Node) (err error) {
 		return nil
 	}
 
-	logstate, err := tpm.ValidatePCRs(log, quote, pcrdata)
+	logstate, err := tpm.ValidatePCRs(log, quote, pcrconfigs)
 	jsonlog, _ := json.Marshal(logstate)
 	if node.ObjectMeta.Annotations == nil {
 		node.ObjectMeta.Annotations = make(map[string]string)
