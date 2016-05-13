@@ -141,6 +141,7 @@ func (kl *Kubelet) runPod(pod *api.Pod, retryDelay time.Duration) error {
 // isPodRunning returns true if all containers of a manifest are running.
 func (kl *Kubelet) isPodRunning(pod *api.Pod, status *kubecontainer.PodStatus) bool {
 	for _, c := range pod.Spec.Containers {
+		glog.Infof("Checking status on container %q for pod %q", c.Name, format.Pod(pod))
 		cs := status.FindContainerStatusByName(c.Name)
 		if cs == nil || cs.State != kubecontainer.ContainerStateRunning {
 			glog.Infof("Container %q for pod %q not running", c.Name, format.Pod(pod))

@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -378,7 +379,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 		glog.Warning(err)
 	}
 
-	kl, err := RunKubelet(kcfg)
+	_, err = RunKubelet(kcfg)
 	if err != nil {
 		return err
 	}
@@ -400,7 +401,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 	select {
 	case <-done:
 		if s.Bootstrap {
-			return kl.WaitForAllPodContainersToRun()
+			os.Exit(0)
 		}
 	}
 	return nil

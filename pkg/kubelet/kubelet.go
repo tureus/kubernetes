@@ -3640,8 +3640,9 @@ func (kl *Kubelet) WaitForAllPodContainersToRun() error {
 		return err
 	}
 	for _, p := range pods {
+		pod := p.ToAPIPod()
+		glog.Infof("waiting for all containers to start for pod: %s\n", format.Pod(pod))
 		for {
-			pod := p.ToAPIPod()
 			status, err := kl.containerRuntime.GetPodStatus(pod.UID, pod.Name, pod.Namespace)
 			if err != nil {
 				return fmt.Errorf("Unable to get status for pod %q: %v", format.Pod(pod), err)
@@ -3649,6 +3650,8 @@ func (kl *Kubelet) WaitForAllPodContainersToRun() error {
 			if kl.isPodRunning(pod, status) {
 				break
 			}
+			time.Sleep(100 * time.Millisecond)
+			glog.Infof("pod %s not running\n", p.Name)
 		}
 	}
 	return nil
