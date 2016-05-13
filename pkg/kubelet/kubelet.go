@@ -3631,29 +3631,3 @@ func extractBandwidthResources(pod *api.Pod) (ingress, egress *resource.Quantity
 	}
 	return ingress, egress, nil
 }
-
-// WaitForAllPodContainersToRun will block until every container in every
-// pod is running.
-func (kl *Kubelet) WaitForAllPodContainersToRun() error {
-	// Wait until all containers in all pods are running before exiting.
-	pods, err := kl.containerRuntime.GetPods(false)
-	if err != nil {
-		return err
-	}
-	for _, p := range pods {
-		pod := p.ToAPIPod()
-		glog.Infof("waiting for all containers to start for pod: %s\n", format.Pod(pod))
-		for {
-			status, err := kl.containerRuntime.GetPodStatus(pod.UID, pod.Name, pod.Namespace)
-			if err != nil {
-				return fmt.Errorf("Unable to get status for pod %q: %v", format.Pod(pod), err)
-			}
-			if kl.isPodRunning(pod, status) {
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-			glog.Infof("pod %s not running\n", p.Name)
-		}
-	}
-	return nil
-}

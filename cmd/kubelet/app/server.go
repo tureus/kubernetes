@@ -24,7 +24,6 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -81,7 +80,6 @@ type KubeletBootstrap interface {
 	ListenAndServeReadOnly(address net.IP, port uint)
 	Run(<-chan kubetypes.PodUpdate)
 	RunOnce(<-chan kubetypes.PodUpdate) ([]kubelet.RunPodResult, error)
-	WaitForAllPodContainersToRun() error
 }
 
 // create and initialize a Kubelet instance
@@ -379,7 +377,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 		glog.Warning(err)
 	}
 
-	_, err = RunKubelet(kcfg)
+	err = RunKubelet(kcfg)
 	if err != nil {
 		return err
 	}
@@ -400,9 +398,6 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 
 	select {
 	case <-done:
-		if s.Bootstrap {
-			os.Exit(0)
-		}
 	}
 	return nil
 }
@@ -613,7 +608,7 @@ func SimpleKubelet(client *clientset.Clientset,
 //   2 Kubelet binary
 //   3 Standalone 'kubernetes' binary
 // Eventually, #2 will be replaced with instances of #3
-func RunKubelet(kcfg *KubeletConfig) (KubeletBootstrap, error) {
+func RunKubelet(kcfg *KubeletConfig) error {
 	kcfg.Hostname = nodeutil.GetHostname(kcfg.HostnameOverride)
 
 	if len(kcfg.NodeName) == 0 {
@@ -623,12 +618,12 @@ func RunKubelet(kcfg *KubeletConfig) (KubeletBootstrap, error) {
 			var err error
 			instances, ok := kcfg.Cloud.Instances()
 			if !ok {
-				return nil, fmt.Errorf("failed to get instances from cloud provider")
+				return fmt.Errorf("failed to get instances from cloud provider")
 			}
 
 			nodeName, err = instances.CurrentNodeName(kcfg.Hostname)
 			if err != nil {
-				return nil, fmt.Errorf("error fetching current instance name from cloud provider: %v", err)
+				return fmt.Errorf("error fetching current instance name from cloud provider: %v", err)
 			}
 
 			glog.V(2).Infof("cloud provider determined current node name to be %s", nodeName)
@@ -665,7 +660,7 @@ func RunKubelet(kcfg *KubeletConfig) (KubeletBootstrap, error) {
 	}
 	k, podCfg, err := builder(kcfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create kubelet: %v", err)
+		return fmt.Errorf("failed to create kubelet: %v", err)
 	}
 
 	util.ApplyRLimitForSelf(kcfg.MaxOpenFiles)
@@ -673,14 +668,14 @@ func RunKubelet(kcfg *KubeletConfig) (KubeletBootstrap, error) {
 	// process pods and exit.
 	if kcfg.Runonce {
 		if _, err := k.RunOnce(podCfg.Updates()); err != nil {
-			return nil, fmt.Errorf("runonce failed: %v", err)
+			return fmt.Errorf("runonce failed: %v", err)
 		}
 		glog.Info("Started kubelet as runonce")
 	} else {
 		startKubelet(k, podCfg, kcfg)
 		glog.Info("Started kubelet")
 	}
-	return k, nil
+	return nil
 }
 
 func startKubelet(k KubeletBootstrap, podCfg *config.PodConfig, kc *KubeletConfig) {
