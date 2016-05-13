@@ -402,9 +402,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 		return nil
 	}
 
-	select {
-	case <-done:
-	}
+	<-done
 	return nil
 }
 
