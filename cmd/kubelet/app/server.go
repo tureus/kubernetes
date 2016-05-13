@@ -297,7 +297,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 				glog.Infof("unable to watch lockfile: %v", err)
 				return err
 			}
-			go func(watcher *inotify.Watcher) {
+			go func() {
 				for {
 					select {
 					case ev := <-watcher.Event:
@@ -311,7 +311,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 						close(done)
 					}
 				}
-			}(watcher)
+			}()
 		}
 	}
 	if c, err := configz.New("componentconfig"); err == nil {
