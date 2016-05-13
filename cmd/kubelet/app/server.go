@@ -19,6 +19,7 @@ package app
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -275,6 +276,10 @@ func Run(s *options.KubeletServer, kcfg *KubeletConfig) error {
 }
 
 func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
+	if s.Bootstrap && s.LockFilePath == "" {
+		return errors.New("unable to start in bootstrap mode: no lock file provided")
+	}
+
 	done := make(chan struct{})
 	if s.LockFilePath != "" {
 		glog.Infof("aquiring lock on %q", s.LockFilePath)
@@ -301,7 +306,8 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 							return
 						}
 					case err := <-watcher.Error:
-						glog.Infof("error: %v", err)
+						glog.Infof("inotify watcher error: %v", err)
+						close(done)
 					}
 				}
 			}()
@@ -326,7 +332,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 			// make a separate client for events
 			eventClientConfig := *clientConfig
 			eventClientConfig.QPS = s.EventRecordQPS
-			eventClientConfig.Burst = s.EventBurst
+			eventClientConfig.Burst = int(s.EventBurst)
 			kcfg.EventClient, err = clientset.NewForConfig(&eventClientConfig)
 		}
 		if err != nil && len(s.APIServerList) > 0 {
@@ -373,7 +379,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 
 	// TODO(vmarmol): Do this through container config.
 	oomAdjuster := kcfg.OOMAdjuster
-	if err := oomAdjuster.ApplyOOMScoreAdj(0, s.OOMScoreAdj); err != nil {
+	if err := oomAdjuster.ApplyOOMScoreAdj(0, int(s.OOMScoreAdj)); err != nil {
 		glog.Warning(err)
 	}
 
@@ -385,7 +391,7 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 	if s.HealthzPort > 0 {
 		healthz.DefaultHealthz()
 		go wait.Until(func() {
-			err := http.ListenAndServe(net.JoinHostPort(s.HealthzBindAddress, strconv.Itoa(s.HealthzPort)), nil)
+			err := http.ListenAndServe(net.JoinHostPort(s.HealthzBindAddress, strconv.Itoa(int(s.HealthzPort))), nil)
 			if err != nil {
 				glog.Errorf("Starting health server failed: %v", err)
 			}
