@@ -30,8 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/exp/inotify"
-
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -288,24 +286,9 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 		}
 		if s.Bootstrap {
 			glog.Infof("watching for inotify events for: %v", s.LockFilePath)
-			watcher, err := inotify.NewWatcher()
-			if err != nil {
-				glog.Infof("unable to create watcher for lockfile: %v", err)
+			if err := listenForLockfileContention(s.LockFilePath, done); err != nil {
 				return err
 			}
-			if err := watcher.AddWatch(s.LockFilePath, inotify.IN_OPEN); err != nil {
-				glog.Infof("unable to watch lockfile: %v", err)
-				return err
-			}
-			go func() {
-				select {
-				case ev := <-watcher.Event:
-					glog.Infof("inotify event: %v", ev)
-				case err := <-watcher.Error:
-					glog.Errorf("inotify watcher error: %v", err)
-				}
-				close(done)
-			}()
 		}
 	}
 	if c, err := configz.New("componentconfig"); err == nil {
