@@ -11,7 +11,7 @@ func listenForLockfileContention(path string, done chan struct{}) error {
 		glog.Errorf("unable to create watcher for lockfile: %v", err)
 		return err
 	}
-	if err = watcher.AddWatch(s.LockFilePath, inotify.IN_OPEN); err != nil {
+	if err = watcher.AddWatch(path, inotify.IN_OPEN); err != nil {
 		glog.Errorf("unable to watch lockfile: %v", err)
 		return err
 	}
