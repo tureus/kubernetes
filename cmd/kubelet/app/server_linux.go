@@ -15,12 +15,14 @@ func listenForLockfileContention(path string, done chan struct{}) error {
 		glog.Errorf("unable to watch lockfile: %v", err)
 		return err
 	}
-	select {
-	case ev := <-watcher.Event:
-		glog.Infof("inotify event: %v", ev)
-	case err = <-watcher.Error:
-		glog.Errorf("inotify watcher error: %v", err)
-	}
-	close(done)
-	return err
+	go func() {
+		select {
+		case ev := <-watcher.Event:
+			glog.Infof("inotify event: %v", ev)
+		case err = <-watcher.Error:
+			glog.Errorf("inotify watcher error: %v", err)
+		}
+		close(done)
+	}()
+	return nil
 }
