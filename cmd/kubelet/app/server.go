@@ -293,24 +293,18 @@ func run(s *options.KubeletServer, kcfg *KubeletConfig) (err error) {
 				glog.Infof("unable to create watcher for lockfile: %v", err)
 				return err
 			}
-			if err := watcher.Watch(s.LockFilePath); err != nil {
+			if err := watcher.AddWatch(s.LockFilePath, inotify.IN_OPEN); err != nil {
 				glog.Infof("unable to watch lockfile: %v", err)
 				return err
 			}
 			go func() {
-				for {
-					select {
-					case ev := <-watcher.Event:
-						glog.Infof("inotify event: %v", ev)
-						if ev.Mask&inotify.IN_OPEN == inotify.IN_OPEN {
-							close(done)
-							return
-						}
-					case err := <-watcher.Error:
-						glog.Infof("inotify watcher error: %v", err)
-						close(done)
-					}
+				select {
+				case ev := <-watcher.Event:
+					glog.Infof("inotify event: %v", ev)
+				case err := <-watcher.Error:
+					glog.Errorf("inotify watcher error: %v", err)
 				}
+				close(done)
 			}()
 		}
 	}
