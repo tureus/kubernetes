@@ -1,6 +1,6 @@
 // +build !linux
 
-package server
+package app
 
 import "errors"
 
