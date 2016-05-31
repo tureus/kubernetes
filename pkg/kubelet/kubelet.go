@@ -940,7 +940,11 @@ func (kl *Kubelet) GetNode() (*api.Node, error) {
 	if kl.standaloneMode {
 		return kl.initialNodeStatus()
 	}
-	return kl.nodeInfo.GetNodeInfo(kl.nodeName)
+	n, err := kl.nodeInfo.GetNodeInfo(kl.nodeName)
+	if err != nil {
+		return kl.initialNodeStatus()
+	}
+	return n, nil
 }
 
 // Starts garbage collection threads.
