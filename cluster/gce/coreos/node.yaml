@@ -53,7 +53,7 @@ coreos:
         RemainAfterExit=yes
         EnvironmentFile=/etc/kube-env
         ExecStartPre=/usr/bin/mkdir -p /etc/rkt /opt/downloads /opt/rkt/
-        ExecStartPre=/usr/bin/curl --fail --silent --location --create-dirs --output /opt/downloads/rkt.tar.gz https://storage.googleapis.com/rkt-bin/rkt-v1.7.0-09c4760.tar.gz
+        ExecStartPre=/usr/bin/curl --fail --silent --location --create-dirs --output /opt/downloads/rkt.tar.gz https://github.com/coreos/rkt/releases/download/v${RKT_VERSION}/rkt-v${RKT_VERSION}.tar.gz
         ExecStart=/usr/bin/tar --strip-components=1 -xf /opt/downloads/rkt.tar.gz -C /opt/rkt/ --overwrite
 
     - name: rkt-api-service.service
