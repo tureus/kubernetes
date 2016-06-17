@@ -29,6 +29,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y \
     socat \
     curl \
     git \
+    nfs-common \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
     && DEBIAN_FRONTEND=noninteractive apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -37,6 +38,7 @@ RUN cp /usr/bin/nsenter /nsenter
 
 # Copy the hyperkube binary
 COPY hyperkube /hyperkube
+RUN ln -s /hyperkube /kubelet
 
 # Manifests for the docker guide
 COPY static-pods/master.json /etc/kubernetes/manifests/
