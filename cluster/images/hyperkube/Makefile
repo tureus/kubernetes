@@ -20,7 +20,7 @@
 REGISTRY?=gcr.io/google_containers
 ARCH?=amd64
 TEMP_DIR:=$(shell mktemp -d)
-CNI_RELEASE=c864f0e1ea73719b8f4582402b0847064f9883b0
+CNI_RELEASE=8a936732094c0941e1543ef5d292a1f4fffa1ac5
 
 UNAME_S:=$(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
@@ -90,6 +90,8 @@ ifeq ($(ARCH),amd64)
 	cd ${TEMP_DIR} && ${SED_CMD} "/CROSS_BUILD_/d" Dockerfile
 	# Download CNI
 	curl -sSL --retry 5 https://storage.googleapis.com/kubernetes-release/network-plugins/cni-${CNI_RELEASE}.tar.gz | tar -xz -C ${TEMP_DIR}/cni
+	curl -sSL --retry 5 -o  ${TEMP_DIR}/cni/bin/calico https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
+	chmod +x ${TEMP_DIR}/cni/bin/calico
 else
 	# When cross-building, only the placeholder "CROSS_BUILD_" should be removed
 	# Register /usr/bin/qemu-ARCH-static as the handler for ARM binaries in the kernel
