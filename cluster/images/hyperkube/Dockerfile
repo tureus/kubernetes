@@ -29,6 +29,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y \
     socat \
     curl \
     git \
+    nfs-common \
+    ceph-common \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
     && DEBIAN_FRONTEND=noninteractive apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -69,6 +71,14 @@ ADD https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz /
 COPY cni /opt/cni
 
 # Create symlinks for each hyperkube server
-# TODO: this is unreliable for now (e.g. running "/kubelet" panics)
-# Also, it doesn't work for other architectures
+# TODO: replace manual symlink creation with --make-symlink command once
+# cross-building with qemu supports go binaries. See #28702
 # RUN /hyperkube --make-symlinks
+RUN ln -s /hyperkube /apiserver \
+ && ln -s /hyperkube /controller-manager \
+ && ln -s /hyperkube /federation-apiserver \
+ && ln -s /hyperkube /federation-controller-manager \
+ && ln -s /hyperkube /kubectl \
+ && ln -s /hyperkube /kubelet \
+ && ln -s /hyperkube /proxy \
+ && ln -s /hyperkube /scheduler
