@@ -74,6 +74,7 @@ endif
 	cd ${TEMP_DIR} && sed -i.back "s|ARCH|${ARCH}|g" addons/singlenode/*.yaml addons/multinode/*.yaml static-pods/*.json
 	cd ${TEMP_DIR} && sed -i.back "s|ARCH|${QEMUARCH}|g" Dockerfile
 	cd ${TEMP_DIR} && sed -i.back "s|BASEIMAGE|${BASEIMAGE}|g" Dockerfile
+	cd ${TEMP_DIR} && sed -i.back "s|CACHEBUST|$(shell uuidgen)|g" Dockerfile
 	cd ${TEMP_DIR} && sed -i.back "s|-amd64|-${ARCH}|g" addons/singlenode/*.yaml addons/multinode/*.yaml
 	cd ${TEMP_DIR} && sed -i.back "s|__PILLAR__DNS__REPLICAS__|1|g;s|__PILLAR__DNS__SERVER__|10.0.0.10|g;" addons/singlenode/skydns*.yaml addons/multinode/skydns*.yaml
 	cd ${TEMP_DIR} && sed -i.back "s|__PILLAR__DNS__DOMAIN__|cluster.local|g;s|__PILLAR__FEDERATIONS__DOMAIN__MAP__||g;" addons/singlenode/skydns*.yaml addons/multinode/skydns*.yaml
@@ -100,6 +101,8 @@ else
 endif
 	# Download CNI
 	curl -sSL --retry 5 https://storage.googleapis.com/kubernetes-release/network-plugins/cni-${ARCH}-${CNI_RELEASE}.tar.gz | tar -xz -C ${TEMP_DIR}/cni-bin
+	curl -sSL --retry 5 -o  ${TEMP_DIR}/cni-bin/bin/calico https://github.com/projectcalico/calico-cni/releases/download/v1.3.1/calico
+	chmod +x ${TEMP_DIR}/cni-bin/bin/calico
 
 	docker build -t ${REGISTRY}/hyperkube-${ARCH}:${VERSION} ${TEMP_DIR}
 	rm -rf "${TEMP_DIR}"
