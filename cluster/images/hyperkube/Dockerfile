@@ -29,9 +29,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -y \
     socat \
     curl \
     git \
+    nfs-common \
+    ceph-common \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get autoremove -y \
-    && DEBIAN_FRONTEND=noninteractive apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && DEBIAN_FRONTEND=noninteractive apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* # CACHEBUST
 
 RUN cp /usr/bin/nsenter /nsenter
 
