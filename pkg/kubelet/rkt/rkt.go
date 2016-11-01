@@ -660,7 +660,7 @@ func copyfile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dst, data, 0640)
+	return ioutil.WriteFile(dst, data, 0644)
 }
 
 // TODO(yifan): Can make rkt handle this when '--net=host'. See https://github.com/coreos/rkt/issues/2430.
@@ -2339,3 +2339,4 @@ func getOSReleaseInfo() (map[string]string, error) {
 	}
 	return result, nil
 }
+
