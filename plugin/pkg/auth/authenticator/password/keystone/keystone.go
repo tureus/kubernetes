@@ -23,11 +23,11 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/rackspace/gophercloud"
-	"github.com/rackspace/gophercloud/openstack"
-	"k8s.io/kubernetes/pkg/auth/user"
-	certutil "k8s.io/kubernetes/pkg/util/cert"
-	netutil "k8s.io/kubernetes/pkg/util/net"
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack"
+	netutil "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/authentication/user"
+	certutil "k8s.io/client-go/pkg/util/cert"
 )
 
 // KeystoneAuthenticator contacts openstack keystone to validate user's credentials passed in the request.
