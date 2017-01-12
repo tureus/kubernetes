@@ -17,8 +17,8 @@ go_library(
     deps = [
         "//pkg/util/cert:go_default_library",
         "//vendor:github.com/golang/glog",
-        "//vendor:github.com/rackspace/gophercloud",
-        "//vendor:github.com/rackspace/gophercloud/openstack",
+        "//vendor:github.com/gophercloud/gophercloud",
+        "//vendor:github.com/gophercloud/gophercloud/openstack",
         "//vendor:k8s.io/apimachinery/pkg/util/net",
         "//vendor:k8s.io/apiserver/pkg/authentication/user",
     ],
