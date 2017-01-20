@@ -165,12 +165,12 @@ func (volumes *VolumesV2) getVolume(diskName string) (Volume, error) {
 		return volume, err
 	}
 
+	volume.ID = volume_v2.ID
+	volume.Name = volume_v2.Name
+	volume.Status = volume_v2.Status
 	if len(volume_v2.Attachments) > 0 {
 		volume.AttachedServerId = volume_v2.Attachments[0].ServerID
 		volume.AttachedDevice = volume_v2.Attachments[0].Device
-		volume.ID = volume_v2.ID
-		volume.Name = volume_v2.Name
-		volume.Status = volume_v2.Status
 	}
 
 	return volume, err
