@@ -339,6 +339,8 @@ func TestVolumes(t *testing.T) {
 		t.Skipf("No config found in environment")
 	}
 
+	cfg.BlockStorage.BSVersion = "v2"
+
 	os, err := newOpenStack(cfg)
 	if err != nil {
 		t.Fatalf("Failed to construct/authenticate OpenStack: %s", err)
