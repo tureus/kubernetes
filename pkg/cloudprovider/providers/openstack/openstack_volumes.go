@@ -25,11 +25,11 @@ import (
 
 	"k8s.io/kubernetes/pkg/volume"
 
-	"github.com/rackspace/gophercloud"
-	"github.com/rackspace/gophercloud/openstack"
-	"github.com/rackspace/gophercloud/openstack/blockstorage/v1/volumes"
-	"github.com/rackspace/gophercloud/openstack/compute/v2/extensions/volumeattach"
-	"github.com/rackspace/gophercloud/pagination"
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack"
+	"github.com/gophercloud/gophercloud/openstack/blockstorage/v2/volumes"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/volumeattach"
+	"github.com/gophercloud/gophercloud/pagination"
 
 	"github.com/golang/glog"
 )
@@ -48,12 +48,12 @@ func (os *OpenStack) AttachDisk(instanceID string, diskName string) (string, err
 		return "", err
 	}
 
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil {
-		if instanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && disk.Attachments[0].ServerID != "" {
+		if instanceID == disk.Attachments[0].ServerID {
 			glog.V(4).Infof("Disk: %q is already attached to compute: %q", diskName, instanceID)
 			return disk.ID, nil
 		} else {
-			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0]["server_id"])
+			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0].ServerID)
 			glog.Errorf(errMsg)
 			return "", errors.New(errMsg)
 		}
@@ -83,7 +83,7 @@ func (os *OpenStack) DetachDisk(instanceID string, partialDiskId string) error {
 		glog.Errorf("Unable to initialize nova client for region: %s", os.region)
 		return err
 	}
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && instanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && disk.Attachments[0].ServerID != "" && instanceID == disk.Attachments[0].ServerID {
 		// This is a blocking call and effects kubelet's performance directly.
 		// We should consider kicking it out into a separate routine, if it is bad.
 		err = volumeattach.Delete(cClient, instanceID, disk.ID).ExtractErr()
@@ -102,7 +102,7 @@ func (os *OpenStack) DetachDisk(instanceID string, partialDiskId string) error {
 
 // Takes a partial/full disk id or diskname
 func (os *OpenStack) getVolume(diskName string) (volumes.Volume, error) {
-	sClient, err := openstack.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
+	sClient, err := openstack.NewBlockStorageV2(os.provider, gophercloud.EndpointOpts{
 		Region: os.region,
 	})
 
@@ -140,7 +140,7 @@ func (os *OpenStack) getVolume(diskName string) (volumes.Volume, error) {
 // Create a volume of given size (in GiB)
 func (os *OpenStack) CreateVolume(name string, size int, vtype, availability string, tags *map[string]string) (volumeName string, err error) {
 
-	sClient, err := openstack.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
+	sClient, err := openstack.NewBlockStorageV2(os.provider, gophercloud.EndpointOpts{
 		Region: os.region,
 	})
 
@@ -150,10 +150,10 @@ func (os *OpenStack) CreateVolume(name string, size int, vtype, availability str
 	}
 
 	opts := volumes.CreateOpts{
-		Name:         name,
-		Size:         size,
-		VolumeType:   vtype,
-		Availability: availability,
+		Name:             name,
+		Size:             size,
+		VolumeType:       vtype,
+		AvailabilityZone: availability,
 	}
 	if tags != nil {
 		opts.Metadata = *tags
@@ -202,7 +202,7 @@ func (os *OpenStack) DeleteVolume(volumeName string) error {
 		return volume.NewDeletedVolumeInUseError(msg)
 	}
 
-	sClient, err := openstack.NewBlockStorageV1(os.provider, gophercloud.EndpointOpts{
+	sClient, err := openstack.NewBlockStorageV2(os.provider, gophercloud.EndpointOpts{
 		Region: os.region,
 	})
 
@@ -225,13 +225,13 @@ func (os *OpenStack) GetAttachmentDiskPath(instanceID string, diskName string) (
 	if err != nil {
 		return "", err
 	}
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil {
-		if instanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && disk.Attachments[0].ServerID != "" {
+		if instanceID == disk.Attachments[0].ServerID {
 			// Attachment[0]["device"] points to the device path
 			// see http://developer.openstack.org/api-ref-blockstorage-v1.html
-			return disk.Attachments[0]["device"].(string), nil
+			return string(disk.Attachments[0].Device), nil
 		} else {
-			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0]["server_id"])
+			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0].ServerID)
 			glog.Errorf(errMsg)
 			return "", errors.New(errMsg)
 		}
@@ -245,7 +245,7 @@ func (os *OpenStack) DiskIsAttached(diskName, instanceID string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && instanceID == disk.Attachments[0]["server_id"] {
+	if len(disk.Attachments) > 0 && disk.Attachments[0].ServerID != "" && instanceID == disk.Attachments[0].ServerID {
 		return true, nil
 	}
 	return false, nil
@@ -262,7 +262,7 @@ func (os *OpenStack) DisksAreAttached(diskNames []string, instanceID string) (ma
 		if err != nil {
 			continue
 		}
-		if len(disk.Attachments) > 0 && disk.Attachments[0]["server_id"] != nil && instanceID == disk.Attachments[0]["server_id"] {
+		if len(disk.Attachments) > 0 && disk.Attachments[0].ServerID != "" && instanceID == disk.Attachments[0].ServerID {
 			attached[diskName] = true
 		}
 	}
