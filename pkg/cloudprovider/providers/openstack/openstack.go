@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	apiversions_v1 "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions"
@@ -34,7 +35,6 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/extensions/trusts"
 	tokens3 "github.com/gophercloud/gophercloud/openstack/identity/v3/tokens"
 	"github.com/gophercloud/gophercloud/pagination"
-	"github.com/mitchellh/mapstructure"
 	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
@@ -91,6 +91,10 @@ type LoadBalancerOpts struct {
 type BlockStorageOpts struct {
 	BSVersion       string `gcfg:"bs-version"`        // overrides autodetection. v1 or v2. Defaults to auto
 	TrustDevicePath bool   `gcfg:"trust-device-path"` // See Issue #33128
+}
+
+type RouterOpts struct {
+	RouterId string `gcfg:"router-id"` // required
 }
 
 // OpenStack is an implementation of cloud provider Interface for OpenStack.
@@ -174,6 +178,18 @@ func readConfig(config io.Reader) (Config, error) {
 	return cfg, err
 }
 
+// Tiny helper for conditional unwind logic
+type Caller bool
+
+func NewCaller() Caller   { return Caller(true) }
+func (c *Caller) Disarm() { *c = false }
+
+func (c *Caller) Call(f func()) {
+	if *c {
+		f()
+	}
+}
+
 func readInstanceID() (string, error) {
 	// Try to find instance ID on the local filesystem (created by cloud-init)
 	const instanceIDFile = "/var/lib/cloud/data/instance-id"
@@ -243,6 +259,25 @@ func mapServerToNodeName(server *servers.Server) types.NodeName {
 	return types.NodeName(server.Name)
 }
 
+func foreachServer(client *gophercloud.ServiceClient, opts servers.ListOptsBuilder, handler func(*servers.Server) (bool, error)) error {
+	pager := servers.List(client, opts)
+
+	err := pager.EachPage(func(page pagination.Page) (bool, error) {
+		s, err := servers.ExtractServers(page)
+		if err != nil {
+			return false, err
+		}
+		for _, server := range s {
+			ok, err := handler(&server)
+			if !ok || err != nil {
+				return false, err
+			}
+		}
+		return true, nil
+	})
+	return err
+}
+
 func getServerByName(client *gophercloud.ServiceClient, name types.NodeName) (*servers.Server, error) {
 	opts := servers.ListOpts{
 		Name:   fmt.Sprintf("^%s$", regexp.QuoteMeta(mapNodeNameToServerName(name))),
@@ -274,6 +309,60 @@ func getServerByName(client *gophercloud.ServiceClient, name types.NodeName) (*s
 	}
 
 	return &serverList[0], nil
+}
+
+func nodeAddresses(srv *servers.Server) ([]api.NodeAddress, error) {
+	addrs := []api.NodeAddress{}
+
+	type Address struct {
+		IpType string `mapstructure:"OS-EXT-IPS:type"`
+		Addr   string
+	}
+
+	var addresses map[string][]Address
+	err := mapstructure.Decode(srv.Addresses, &addresses)
+	if err != nil {
+		return nil, err
+	}
+
+	for network, addrlist := range addresses {
+		for _, props := range addrlist {
+			var addressType api.NodeAddressType
+			if props.IpType == "floating" || network == "public" {
+				addressType = api.NodeExternalIP
+			} else {
+				addressType = api.NodeInternalIP
+			}
+
+			api.AddToNodeAddresses(&addrs,
+				api.NodeAddress{
+					Type:    addressType,
+					Address: props.Addr,
+				},
+			)
+		}
+	}
+
+	// AccessIPs are usually duplicates of "public" addresses.
+	if srv.AccessIPv4 != "" {
+		api.AddToNodeAddresses(&addrs,
+			api.NodeAddress{
+				Type:    api.NodeExternalIP,
+				Address: srv.AccessIPv4,
+			},
+		)
+	}
+
+	if srv.AccessIPv6 != "" {
+		api.AddToNodeAddresses(&addrs,
+			api.NodeAddress{
+				Type:    api.NodeExternalIP,
+				Address: srv.AccessIPv6,
+			},
+		)
+	}
+
+	return addrs, nil
 }
 
 func getAddressesByName(client *gophercloud.ServiceClient, name types.NodeName) ([]api.NodeAddress, error) {

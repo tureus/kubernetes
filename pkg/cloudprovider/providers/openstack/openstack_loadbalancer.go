@@ -487,27 +487,27 @@ func waitLoadbalancerDeleted(client *gophercloud.ServiceClient, loadbalancerID s
 	}
 }
 
-func toRuleProtocol(protocol v1.Protocol) rules.RuleProtocol {
+func toRuleProtocol(protocol api.Protocol) rules.RuleProtocol {
 	switch protocol {
-	case v1.ProtocolTCP:
+	case api.ProtocolTCP:
 		return rules.ProtocolTCP
-	case v1.ProtocolUDP:
+	case api.ProtocolUDP:
 		return rules.ProtocolUDP
 	default:
 		return rules.RuleProtocol(strings.ToLower(string(protocol)))
 	}
 }
 
-func toListenersProtocol(protocol v1.Protocol) listeners.Protocol {
+func toListenersProtocol(protocol api.Protocol) listeners.Protocol {
 	switch protocol {
-	case v1.ProtocolTCP:
+	case api.ProtocolTCP:
 		return listeners.ProtocolTCP
 	default:
 		return listeners.Protocol(string(protocol))
 	}
 }
 
-func createNodeSecurityGroup(client *gophercloud.ServiceClient, nodeSecurityGroupID string, port int, protocol v1.Protocol, lbSecGroup string) error {
+func createNodeSecurityGroup(client *gophercloud.ServiceClient, nodeSecurityGroupID string, port int, protocol api.Protocol, lbSecGroup string) error {
 	v4NodeSecGroupRuleCreateOpts := rules.CreateOpts{
 		Direction:     rules.DirIngress,
 		PortRangeMax:  port,
