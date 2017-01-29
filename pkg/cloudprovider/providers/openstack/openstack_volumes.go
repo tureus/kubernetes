@@ -55,7 +55,13 @@ func (os *OpenStack) AttachDisk(instanceID string, diskName string) (string, err
 		} else {
 			errMsg := fmt.Sprintf("Disk %q is attached to a different compute: %q, should be detached before proceeding", diskName, disk.Attachments[0].ServerID)
 			glog.Errorf(errMsg)
-			return "", errors.New(errMsg)
+			glog.Errorf(fmt.Sprintf("TRY OUT_OF_BAND DETACH of disk %q from compute: %q. BAD AND IS A DIRTY HACK.", diskName, disk.Attachments[0].ServerID))
+			if os.DetachDisk(disk.Attachments[0].ServerID, diskName) == nil {
+				return os.AttachDisk(instanceID, diskName)
+			} else {
+				return "", errors.New(errMsg)
+			}
+
 		}
 	}
 	// add read only flag here if possible spothanis
