@@ -688,6 +688,7 @@ func NewMainKubelet(kubeCfg *componentconfig.KubeletConfiguration, kubeDeps *Kub
 
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
+	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
 	klet.updatePodCIDR(kubeCfg.PodCIDR)
 
 	// setup containerGC
@@ -1910,20 +1911,26 @@ func (kl *Kubelet) handleMirrorPod(mirrorPod *api.Pod, start time.Time) {
 func (kl *Kubelet) HandlePodAdditions(pods []*api.Pod) {
 	start := kl.clock.Now()
 
-	// Pass critical pods through admission check first.
-	var criticalPods []*api.Pod
-	var nonCriticalPods []*api.Pod
-	for _, p := range pods {
-		if kubetypes.IsCriticalPod(p) {
-			criticalPods = append(criticalPods, p)
-		} else {
-			nonCriticalPods = append(nonCriticalPods, p)
+	if utilconfig.DefaultFeatureGate.ExperimentalCriticalPodAnnotation() {
+		// Pass critical pods through admission check first.
+		var criticalPods []*api.Pod
+		var nonCriticalPods []*api.Pod
+		for _, p := range pods {
+			if kubetypes.IsCriticalPod(p) {
+				criticalPods = append(criticalPods, p)
+			} else {
+				nonCriticalPods = append(nonCriticalPods, p)
+			}
 		}
-	}
-	sort.Sort(sliceutils.PodsByCreationTime(criticalPods))
-	sort.Sort(sliceutils.PodsByCreationTime(nonCriticalPods))
+		sort.Sort(sliceutils.PodsByCreationTime(criticalPods))
+		sort.Sort(sliceutils.PodsByCreationTime(nonCriticalPods))
+		pods = append(criticalPods, nonCriticalPods...)
 
-	for _, pod := range append(criticalPods, nonCriticalPods...) {
+	} else {
+		sort.Sort(sliceutils.PodsByCreationTime(pods))
+	}
+
+	for _, pod := range pods {
 		existingPods := kl.podManager.GetPods()
 		// Always add the pod to the pod manager. Kubelet relies on the pod
 		// manager as the source of truth for the desired state. If a pod does
@@ -2026,11 +2033,6 @@ func (kl *Kubelet) LatestLoopEntryTime() time.Time {
 		return time.Time{}
 	}
 	return val.(time.Time)
-}
-
-// PLEGHealthCheck returns whether the PLEG is healty.
-func (kl *Kubelet) PLEGHealthCheck() (bool, error) {
-	return kl.pleg.Healthy()
 }
 
 // updateRuntimeUp calls the container runtime status callback, initializing

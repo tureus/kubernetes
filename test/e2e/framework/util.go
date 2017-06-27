@@ -338,6 +338,16 @@ func SkipUnlessServerVersionGTE(v semver.Version, c discovery.ServerVersionInter
 	}
 }
 
+func SkipIfServerVersionGTE(v semver.Version, c discovery.ServerVersionInterface) {
+	gte, err := ServerVersionGTE(v, c)
+	if err != nil {
+		Failf("Failed to get server version: %v", err)
+	}
+	if gte {
+		Skipf("Not supported for server versions after %q", v)
+	}
+}
+
 // Detects whether the federation namespace exists in the underlying cluster
 func SkipUnlessFederated(c clientset.Interface) {
 	federationNS := os.Getenv("FEDERATION_NAMESPACE")
@@ -1654,6 +1664,16 @@ func SkipUnlessKubectlVersionGTE(v semver.Version) {
 	}
 	if !gte {
 		Skipf("Not supported for kubectl versions before %q", v)
+	}
+}
+
+func SkipUnlessKubectlVersionLTE(v semver.Version) {
+	gte, err := KubectlVersionGTE(v)
+	if err != nil {
+		Failf("Failed to get kubectl version: %v", err)
+	}
+	if gte {
+		Skipf("Not supported for kubectl versions after %q", v)
 	}
 }
 
@@ -4531,7 +4551,7 @@ func LaunchWebserverPod(f *Framework, podName, nodeName string) (ip string) {
 			Containers: []api.Container{
 				{
 					Name:  containerName,
-					Image: "gcr.io/google_containers/porter:cd5cb5791ebaa8641955f0e8c2a9bed669b1eaab",
+					Image: "gcr.io/google_containers/porter:4524579c0eb935c056c8e75563b4e1eda31587e0",
 					Env:   []api.EnvVar{{Name: fmt.Sprintf("SERVE_PORT_%d", port), Value: "foo"}},
 					Ports: []api.ContainerPort{{ContainerPort: int32(port)}},
 				},
@@ -4639,6 +4659,13 @@ func GetPodsInNamespace(c clientset.Interface, ns string, ignoreLabels map[strin
 // RunCmd runs cmd using args and returns its stdout and stderr. It also outputs
 // cmd's stdout and stderr to their respective OS streams.
 func RunCmd(command string, args ...string) (string, string, error) {
+	return RunCmdEnv(nil, command, args...)
+}
+
+// RunCmdEnv runs cmd with the provided environment and args and
+// returns its stdout and stderr. It also outputs cmd's stdout and
+// stderr to their respective OS streams.
+func RunCmdEnv(env []string, command string, args ...string) (string, string, error) {
 	Logf("Running %s %v", command, args)
 	var bout, berr bytes.Buffer
 	cmd := exec.Command(command, args...)
@@ -4649,6 +4676,7 @@ func RunCmd(command string, args ...string) (string, string, error) {
 	// newlines.
 	cmd.Stdout = io.MultiWriter(os.Stdout, &bout)
 	cmd.Stderr = io.MultiWriter(os.Stderr, &berr)
+	cmd.Env = env
 	err := cmd.Run()
 	stdout, stderr := bout.String(), berr.String()
 	if err != nil {
